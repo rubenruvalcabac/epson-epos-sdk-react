@@ -1,70 +1,104 @@
-# Getting Started with Create React App
+# Epson ePOS SDK with React JS
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Printing from React JS in Epson thermal printer using the Epson ePOS SDK for Javascript.
 
-## Available Scripts
+Printing from a web app looks pretty straightforward, just call the `window.print()` method, and that's it. But that approach has some drawbacks:
 
-In the project directory, you can run:
+- You'll require to create a view of what you want to print (and/or use some printing specific CSS to achieve a proper presentation)
+- It will show the user a print dialog, which the user needs to complete in order to begin the printing
+- The printing will be a graphical representation of the page
+- The client device must have installed the printer drivers
 
-### `npm start`
+For many scenarios, the above is not so bad. But in a high demand environment (like in a POS application) each one is a drawback that becomes an important impact to performance and productivity:
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+- Requiring a printer view, could distract the user or lose the current information they're working with.
+- Showing the printer dialog demands user extra actions and slows the process of getting the printing.
+- Printing graphical demands more network traffic, the printing is slower and doesn't get the maximum printer speed. Raw printing is what POS printers are built for max performance.
+- Requiring an installed driver on the client device, is a huge challenge for mobile users and limits application adoption.
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+So, the **goals** for this project are:
 
-### `npm test`
+- Printing without changing what the users is looking at. Printing on background, automatically and without showing any dialog.
+- Printing raw to reach the maximum printer performance and reduce network traffic.
+- Don't need any installed printer driver, and use network connection to the printer, so don't need to physically connect the device to the printer.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Epson ePOS SDK for JavaScript
 
-### `npm run build`
+This SDK provides a communication solution between JS and the printer, for a wide number of POS printers models. My solution is based on using this SDK.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+1. Download the SDK: [https://download.epson-biz.com/modules/pos/index.php?page=single_soft&cid=6679&scat=57&pcat=52](https://download.epson-biz.com/modules/pos/index.php?page=single_soft&cid=6679&scat=57&pcat=52)
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+2. Unzip the SDK and copy the `epos-2.17.0.js` file to your project under the `public` folder.
+   ![image](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/iy55udce1lnwz3zw3wg5.png)
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+3. Reference the script
+   As the SDK is not designed to be used on strict mode, to be included in a React app, need to be referenced on `public/index.html` file.
 
-### `npm run eject`
+![image](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/ykkmxw6nqlzzjrawdzhd.png)
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+## Printing
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Printing to a network printer is like any other communication process, connect to the device and send the requests.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+### Connect to the printer
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+The `connect` function opens the connection with the printer and keeps it open for further printing.
 
-## Learn More
+```javascript
+let ePosDev = new window.epson.ePOSDevice();
+ePosDevice.current = ePosDev;
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+ePosDev.connect(printerIPAddress, printerPort, (data) => {
+  if (data === "OK") {
+    ePosDev.createDevice(
+      "local_printer",
+      ePosDev.DEVICE_TYPE_PRINTER,
+      { crypto: true, buffer: false },
+      (devobj, retcode) => {
+        if (retcode === "OK") {
+          printer.current = devobj;
+          setConnectionStatus(STATUS_CONNECTED);
+        } else {
+          throw retcode;
+        }
+      }
+    );
+  } else {
+    throw data;
+  }
+});
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Send information to the printer
 
-### Code Splitting
+Once the connection to the printer is open, just have to send what you want to print. The `print` function does it:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+```javascript
+const print = (text) => {
+  let prn = printer.current;
+  if (!prn) {
+    alert("Not connected to printer");
+    return;
+  }
 
-### Analyzing the Bundle Size
+  prn.addText(text);
+  prn.addFeedLine(5);
+  prn.addCut(prn.CUT_FEED);
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+  prn.send();
+};
+```
 
-### Making a Progressive Web App
+### Design your ticket
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+The SDK provides a lot of methods (`addText`, `addFeedLine`, etc.) to print and use the printer capabilities. [Here you can check the available SDK methods ](https://reference.epson-biz.com/modules/ref_epos_sdk_js_en/index.php?content_id=1#BHIDAHEE)
 
-### Advanced Configuration
+The easier way to design your ticket is using the SDK included designer. In the SDK folder just navigate to the `/ReceiptDesigner/index.en.html`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+![image](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/e55qxhblsjosk55fdmfs.png)
 
-### Deployment
+On the 'Edit' tab you can add commands to build your format, and on the 'API' tab you'll get the code to print the format:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+![image](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/oi8993afcuze7t4s009h.png)
 
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+You can get the code from the `print()` method.

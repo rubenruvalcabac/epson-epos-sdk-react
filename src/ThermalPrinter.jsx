@@ -1,10 +1,15 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 
 const ThermalPrinter = () => {
-  const [printerIPAddress, setPrinterIPAddress] = useState("");
-  const [printerPort, setPrinterPort] = useState("");
+  const [printerIPAddress, setPrinterIPAddress] = useState("192.168.0.121");
+  const [printerPort, setPrinterPort] = useState("8008");
   const [textToPrint, setTextToPrint] = useState("");
   const [connectionStatus, setConnectionStatus] = useState("");
+
+  const ePosDevice = useRef();
+  const printer = useRef();
+
+  const STATUS_CONNECTED = "Connected";
 
   const connect = () => {
     setConnectionStatus("Connecting ...");
@@ -18,7 +23,44 @@ const ThermalPrinter = () => {
       return;
     }
 
-    setConnectionStatus("Connected");
+    setConnectionStatus("Connecting ...");
+
+    let ePosDev = new window.epson.ePOSDevice();
+    ePosDevice.current = ePosDev;
+
+    ePosDev.connect(printerIPAddress, printerPort, (data) => {
+      if (data === "OK") {
+        ePosDev.createDevice(
+          "local_printer",
+          ePosDev.DEVICE_TYPE_PRINTER,
+          { crypto: true, buffer: false },
+          (devobj, retcode) => {
+            if (retcode === "OK") {
+              printer.current = devobj;
+              setConnectionStatus(STATUS_CONNECTED);
+            } else {
+              throw retcode;
+            }
+          }
+        );
+      } else {
+        throw data;
+      }
+    });
+  };
+
+  const print = (text) => {
+    let prn = printer.current;
+    if (!prn) {
+      alert("Not connected to printer");
+      return;
+    }
+
+    prn.addText(text);
+    prn.addFeedLine(5);
+    prn.addCut(prn.CUT_FEED);
+
+    prn.send();
   };
 
   return (
@@ -35,16 +77,27 @@ const ThermalPrinter = () => {
         value={printerPort}
         onChange={(e) => setPrinterPort(e.currentTarget.value)}
       />
-      <button onClick={() => connect()}>Connect</button>
+      <button
+        disabled={connectionStatus === STATUS_CONNECTED}
+        onClick={() => connect()}
+      >
+        Connect
+      </button>
       <span className="status-label">{connectionStatus}</span>
       <hr />
-      <input
+      <textarea
         id="textToPrint"
+        rows="3"
         placeholder="Text to print"
         value={textToPrint}
         onChange={(e) => setTextToPrint(e.currentTarget.value)}
       />
-      <button disabled={connectionStatus !== "Connected"}>Print</button>
+      <button
+        disabled={connectionStatus !== STATUS_CONNECTED}
+        onClick={() => print(textToPrint)}
+      >
+        Print
+      </button>
     </div>
   );
 };

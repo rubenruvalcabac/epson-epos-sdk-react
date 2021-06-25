@@ -37,13 +37,14 @@
   }
 }
 
-#thermalPrinter * {
-  display: block;
+#thermalPrinter {
+  display: flex;
+  flex-direction: column;
 }
 
-input {
+input,
+textarea {
   font-size: 2rem;
-
   margin-bottom: 1rem;
 }
 
